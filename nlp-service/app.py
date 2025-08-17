@@ -7,29 +7,13 @@ from spacy.matcher import Matcher
 import os
 from dotenv import load_dotenv
 
-# --- NEW: Function to ensure spaCy model is downloaded ---
-def download_spacy_model():
-    model_name = "en_core_web_sm"
-    try:
-        spacy.load(model_name)
-        print(f"'{model_name}' model already installed.")
-    except OSError:
-        print(f"Downloading '{model_name}' model...")
-        from spacy.cli import download
-        download(model_name)
-        print(f"'{model_name}' model downloaded successfully.")
-
-# --- Run the download check when the app starts ---
-download_spacy_model()
-
-
 # Load environment variables from .env file for local development
 load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
 
-# --- UPDATED: Configure Flask-Mail with default values ---
+# --- Configure Flask-Mail with default values ---
 app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
 app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
 app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'true').lower() in ['true', '1', 't']
@@ -39,7 +23,8 @@ app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', app.co
 
 mail = Mail(app)
 
-# --- (spaCy and NLP logic remains the same) ---
+# --- spaCy and NLP Logic ---
+# The model is now guaranteed to be available because of the updated build command.
 nlp = spacy.load("en_core_web_sm", disable=["parser", "ner"])
 SKILLS_DB = [
     'react', 'javascript', 'node.js', 'express', 'mongodb', 'python', 'java',
@@ -47,6 +32,7 @@ SKILLS_DB = [
     'redux', 'graphql', 'rest', 'api', 'agile', 'scrum', 'machine learning',
     'data analysis', 'project management'
 ]
+# Correctly create patterns for single and multi-word skills
 skill_patterns = [[{"LOWER": s} for s in skill.split()] for skill in SKILLS_DB]
 matcher = Matcher(nlp.vocab)
 matcher.add("SKILL_MATCHER", skill_patterns)
@@ -73,18 +59,14 @@ def analyze_resume():
 
         resume_skills = extract_skills(resume_text)
         jd_skills = extract_skills(jd_text)
+        
         matched_skills = resume_skills.intersection(jd_skills)
         missing_skills = jd_skills.difference(resume_skills)
 
-        base_score = 0
-        if jd_skills:
-            base_score = (len(matched_skills) / len(jd_skills)) * 100 if len(jd_skills) > 0 else 0
+        base_score = (len(matched_skills) / len(jd_skills)) * 100 if jd_skills else 0
         
         VALIDATED_SKILL_BONUS = 5
-        bonus_score = 0
-        for skill in matched_skills:
-            if skill in validated_skills:
-                bonus_score += VALIDATED_SKILL_BONUS
+        bonus_score = sum(VALIDATED_SKILL_BONUS for skill in matched_skills if skill in validated_skills)
         
         final_score = min(round(base_score + bonus_score), 100)
 
@@ -92,7 +74,7 @@ def analyze_resume():
         if matched_skills:
             summary += f"They possess key skills such as {', '.join(list(matched_skills)[:3])}. "
         if bonus_score > 0:
-            summary += "Their score was boosted based on skills you have previously approved in other candidates. "
+            summary += "Their score was boosted based on skills you have previously approved. "
         if missing_skills:
             summary += f"However, they may be lacking in areas like {', '.join(list(missing_skills)[:3])}."
         else:
