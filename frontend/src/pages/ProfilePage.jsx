@@ -1,6 +1,6 @@
 // frontend/src/pages/ProfilePage.jsx
 import React, { useState, useContext } from 'react';
-import axios from 'axios';
+import axios from '../api/axios';
 import { Link } from 'react-router-dom';
 import AuthContext from '../context/AuthContext';
 
