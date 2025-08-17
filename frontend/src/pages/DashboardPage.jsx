@@ -1,6 +1,6 @@
 // frontend/src/pages/DashboardPage.jsx
 import React, { useState } from 'react';
-import axios from '../api/axios'; // Make sure you are using the custom instance
+import axios from '../api/axios'; // CRITICAL: Use the custom axios instance
 import { Link } from 'react-router-dom';
 
 const DashboardPage = () => {
@@ -32,14 +32,12 @@ const DashboardPage = () => {
     try {
       const matchRes = await axios.post('/api/match', formData, { 
         headers: { 'Content-Type': 'multipart/form-data' },
-        // --- NEW: Add a longer timeout for the request ---
-        timeout: 120000 // 2 minutes
+        timeout: 180000 // 3 minutes timeout for sleepy services
       });
       setRankedResults(matchRes.data);
       const batchToSave = { jobTitle, jobDescription, rankedCandidates: matchRes.data };
       await axios.post('/api/jobs', batchToSave);
     } catch (err) {
-      // --- UPDATED: More specific error handling ---
       if (axios.isCancel(err)) {
         setError('The request was canceled.');
       } else if (err.code === 'ECONNABORTED') {
@@ -52,7 +50,6 @@ const DashboardPage = () => {
     }
   };
 
-  // ... The rest of the component (RankedList, AnalysisModal, JSX) remains the same ...
   const RankedList = ({ results }) => (
     <div className="bg-white p-6 rounded-lg shadow-md mt-8 animate-fade-in-up">
       <h2 className="text-2xl font-bold mb-4 text-gray-800">Ranked Candidate List</h2>
@@ -137,8 +134,9 @@ const DashboardPage = () => {
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen">
       <div className="mb-8">
-        <Link to="/dashboard" className="text-indigo-600 hover:underline mb-4 inline-block">
-          &larr; Back to Dashboard
+        <Link to="/dashboard" className="text-indigo-600 hover:underline mb-4 inline-flex items-center text-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+            Back to Dashboard
         </Link>
         <h1 className="text-3xl font-bold text-gray-800">Start a New Analysis</h1>
         <p className="text-gray-600 mt-1">Upload multiple resumes to rank them against a single job description.</p>

@@ -7,23 +7,39 @@ from spacy.matcher import Matcher
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# --- NEW: Function to ensure spaCy model is downloaded ---
+def download_spacy_model():
+    model_name = "en_core_web_sm"
+    try:
+        spacy.load(model_name)
+        print(f"'{model_name}' model already installed.")
+    except OSError:
+        print(f"Downloading '{model_name}' model...")
+        from spacy.cli import download
+        download(model_name)
+        print(f"'{model_name}' model downloaded successfully.")
+
+# --- Run the download check when the app starts ---
+download_spacy_model()
+
+
+# Load environment variables from .env file for local development
 load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
 
-# --- NEW: Configure Flask-Mail ---
-app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER')
-app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT'))
-app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS').lower() in ['true', '1', 't']
+# --- UPDATED: Configure Flask-Mail with default values ---
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'true').lower() in ['true', '1', 't']
 app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', app.config['MAIL_USERNAME'])
 
 mail = Mail(app)
 
-# --- (Existing spaCy and NLP logic) ---
+# --- (spaCy and NLP logic remains the same) ---
 nlp = spacy.load("en_core_web_sm", disable=["parser", "ner"])
 SKILLS_DB = [
     'react', 'javascript', 'node.js', 'express', 'mongodb', 'python', 'java',
@@ -62,7 +78,7 @@ def analyze_resume():
 
         base_score = 0
         if jd_skills:
-            base_score = (len(matched_skills) / len(jd_skills)) * 100
+            base_score = (len(matched_skills) / len(jd_skills)) * 100 if len(jd_skills) > 0 else 0
         
         VALIDATED_SKILL_BONUS = 5
         bonus_score = 0
@@ -88,12 +104,16 @@ def analyze_resume():
         }
         return jsonify(response)
     except Exception as e:
+        print(f"ERROR in /analyze: {e}")
         return jsonify({"error": str(e)}), 500
 
-# --- NEW: Email Sending Route ---
 @app.route('/send-email', methods=['POST'])
 def send_email():
     try:
+        if not app.config['MAIL_USERNAME'] or not app.config['MAIL_PASSWORD']:
+            print("ERROR: Email credentials are not configured on the server.")
+            return jsonify({"error": "Email service is not configured by the server administrator."}), 500
+
         data = request.get_json()
         recipient = data.get('recipient')
         subject = data.get('subject')
