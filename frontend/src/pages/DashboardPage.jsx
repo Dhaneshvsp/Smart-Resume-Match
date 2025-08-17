@@ -1,7 +1,7 @@
 // frontend/src/pages/DashboardPage.jsx
 import React, { useState } from 'react';
-import axios from 'axios';
-import { useNavigate, Link } from 'react-router-dom';
+import axios from '../api/axios'; // Make sure you are using the custom instance
+import { Link } from 'react-router-dom';
 
 const DashboardPage = () => {
   const [resumes, setResumes] = useState([]);
@@ -11,7 +11,6 @@ const DashboardPage = () => {
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const navigate = useNavigate();
 
   const onFileChange = (e) => {
     setResumes(Array.from(e.target.files));
@@ -31,17 +30,29 @@ const DashboardPage = () => {
     formData.append('jobDescription', jobDescription);
     resumes.forEach(resume => formData.append('resumes', resume));
     try {
-      const matchRes = await axios.post('/api/match', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const matchRes = await axios.post('/api/match', formData, { 
+        headers: { 'Content-Type': 'multipart/form-data' },
+        // --- NEW: Add a longer timeout for the request ---
+        timeout: 120000 // 2 minutes
+      });
       setRankedResults(matchRes.data);
       const batchToSave = { jobTitle, jobDescription, rankedCandidates: matchRes.data };
       await axios.post('/api/jobs', batchToSave);
-    } catch (err)      {
-      setError(err.response?.data?.msg || 'An error occurred during analysis.');
+    } catch (err) {
+      // --- UPDATED: More specific error handling ---
+      if (axios.isCancel(err)) {
+        setError('The request was canceled.');
+      } else if (err.code === 'ECONNABORTED') {
+        setError('The analysis is taking too long and timed out. This can happen on free services. Please try again in a minute.');
+      } else {
+        setError(err.response?.data?.msg || 'An error occurred during analysis.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  // ... The rest of the component (RankedList, AnalysisModal, JSX) remains the same ...
   const RankedList = ({ results }) => (
     <div className="bg-white p-6 rounded-lg shadow-md mt-8 animate-fade-in-up">
       <h2 className="text-2xl font-bold mb-4 text-gray-800">Ranked Candidate List</h2>
@@ -122,11 +133,10 @@ const DashboardPage = () => {
       </div>
     );
   };
-
+  
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen">
       <div className="mb-8">
-        {/* --- NEW: Back to Dashboard Link --- */}
         <Link to="/dashboard" className="text-indigo-600 hover:underline mb-4 inline-block">
           &larr; Back to Dashboard
         </Link>

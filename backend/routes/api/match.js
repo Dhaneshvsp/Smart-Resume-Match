@@ -5,13 +5,10 @@ const multer = require('multer');
 const pdf = require('pdf-parse');
 const auth = require('../../middleware/auth.middleware');
 const fetch = require('node-fetch');
-const JobBatch = require('../../models/JobBatch'); // Import the JobBatch model
+const JobBatch = require('../../models/JobBatch');
 
 const upload = multer({ storage: multer.memoryStorage() }).array('resumes', 20);
 
-// @route   POST api/match
-// @desc    Analyze multiple resumes, using past feedback to improve scoring
-// @access  Private
 router.post('/', [auth, upload], async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
@@ -22,10 +19,11 @@ router.post('/', [auth, upload], async (req, res) => {
       return res.status(400).json({ msg: 'Job description is required.' });
     }
 
-    // --- NEW: Step 1 - Find Recruiter's Preferred Skills ---
+    const nlpServiceUrl = process.env.NLP_SERVICE_URL || 'http://127.0.0.1:5001/analyze';
+    console.log(`Connecting to NLP Service at: ${nlpServiceUrl}`);
+
     const previousBatches = await JobBatch.find({ user: req.user.id });
     const validatedSkills = new Set();
-
     previousBatches.forEach(batch => {
       batch.rankedCandidates.forEach(candidate => {
         if (candidate.status === 'Approved') {
@@ -34,47 +32,43 @@ router.post('/', [auth, upload], async (req, res) => {
       });
     });
 
-    const nlpServiceUrl = process.env.NLP_SERVICE_URL || 'http://127.0.0.1:5001/analyze';
-    const analysisPromises = [];
-
+    // --- UPDATED: Process resumes sequentially instead of in parallel ---
+    const results = [];
     for (const file of req.files) {
-      const analysisPromise = new Promise(async (resolve, reject) => {
-        try {
-          const data = await pdf(file.buffer);
-          const resumeText = data.text;
+      console.log(`Processing file: ${file.originalname}`);
+      try {
+        const data = await pdf(file.buffer);
+        const resumeText = data.text;
 
-          // --- UPDATED: Step 2 - Send Preferred Skills to NLP Service ---
-          const payload = {
-            resume_text: resumeText,
-            jd_text: jobDescription,
-            validated_skills: [...validatedSkills], // Pass the list of preferred skills
-          };
+        const payload = {
+          resume_text: resumeText,
+          jd_text: jobDescription,
+          validated_skills: [...validatedSkills],
+        };
 
-          const nlpResponse = await fetch(nlpServiceUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
+        const nlpResponse = await fetch(nlpServiceUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
 
-          if (!nlpResponse.ok) {
-            return reject(`Failed to analyze ${file.originalname}`);
-          }
-
-          const analysisJson = await nlpResponse.json();
-          
-          resolve({
-            fileName: file.originalname,
-            ...analysisJson,
-          });
-
-        } catch (error) {
-          reject(`Error processing ${file.originalname}: ${error.message}`);
+        if (!nlpResponse.ok) {
+          console.error(`NLP Service failed for ${file.originalname}`);
+          // We can choose to skip this file and continue
+          continue; 
         }
-      });
-      analysisPromises.push(analysisPromise);
+
+        const analysisJson = await nlpResponse.json();
+        results.push({
+          fileName: file.originalname,
+          ...analysisJson,
+        });
+
+      } catch (error) {
+        console.error(`Error processing ${file.originalname}:`, error);
+      }
     }
 
-    const results = await Promise.all(analysisPromises);
     const rankedResults = results.sort((a, b) => b.matchScore - a.matchScore);
     
     res.json(rankedResults);
