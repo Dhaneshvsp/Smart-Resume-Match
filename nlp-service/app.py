@@ -1,11 +1,26 @@
 # nlp-service/app.py
 
 from flask import Flask, request, jsonify
-from flask_mail import Mail, Message
+# from flask_mail import Mail, Message # Temporarily commented out for debugging
 import spacy
 from spacy.matcher import Matcher
 import os
 from dotenv import load_dotenv
+
+# --- NEW: Function to ensure spaCy model is downloaded ---
+def download_spacy_model():
+    model_name = "en_core_web_sm"
+    try:
+        spacy.load(model_name)
+        print(f"PYTHON: '{model_name}' model already installed.")
+    except OSError:
+        print(f"PYTHON: Downloading '{model_name}' model...")
+        from spacy.cli import download
+        download(model_name)
+        print(f"PYTHON: '{model_name}' model downloaded successfully.")
+
+# --- Run the download check when the app starts ---
+download_spacy_model()
 
 # Load environment variables from .env file for local development
 load_dotenv()
@@ -21,7 +36,7 @@ app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', app.config['MAIL_USERNAME'])
 
-mail = Mail(app)
+# mail = Mail(app) # Temporarily commented out
 
 # --- spaCy and NLP Logic ---
 # The model is now guaranteed to be available because of the updated build command.
@@ -46,19 +61,35 @@ def extract_skills(text):
         found_skills.add(span.text)
     return found_skills
 
+# --- NEW: Health Check Route ---
+@app.route('/', methods=['GET'])
+def health_check():
+    return "NLP Service is running and healthy."
+
 @app.route('/analyze', methods=['POST'])
 def analyze_resume():
+    print("--- PYTHON: /analyze route initiated ---")
     try:
         data = request.get_json()
-        resume_text = data.get('resume_text')
-        jd_text = data.get('jd_text')
+        if not data:
+            print("PYTHON: ERROR - Request body is not JSON or is empty.")
+            return jsonify({"error": "Invalid request body. Expected JSON."}), 400
+
+        resume_text = data.get('resume_text', '')
+        jd_text = data.get('jd_text', '')
         validated_skills = set(data.get('validated_skills', []))
+        
+        print(f"PYTHON: Received resume text length: {len(resume_text)}")
+        print(f"PYTHON: Received JD text length: {len(jd_text)}")
 
         if not resume_text or not jd_text:
             return jsonify({"error": "Missing 'resume_text' or 'jd_text' in request body"}), 400
 
         resume_skills = extract_skills(resume_text)
         jd_skills = extract_skills(jd_text)
+        
+        print(f"PYTHON: Skills found in JD: {jd_skills}")
+        print(f"PYTHON: Skills found in Resume: {resume_skills}")
         
         matched_skills = resume_skills.intersection(jd_skills)
         missing_skills = jd_skills.difference(resume_skills)
@@ -69,6 +100,8 @@ def analyze_resume():
         bonus_score = sum(VALIDATED_SKILL_BONUS for skill in matched_skills if skill in validated_skills)
         
         final_score = min(round(base_score + bonus_score), 100)
+        
+        print(f"PYTHON: Final score calculated: {final_score}")
 
         summary = f"The candidate appears to be a {final_score}% match for this role. "
         if matched_skills:
@@ -84,34 +117,16 @@ def analyze_resume():
             "matchScore": final_score, "summary": summary,
             "matchedSkills": list(matched_skills), "missingSkills": list(missing_skills)
         }
+        print("--- PYTHON: /analyze route finished. Sending response. ---")
         return jsonify(response)
     except Exception as e:
-        print(f"ERROR in /analyze: {e}")
+        print(f"PYTHON: CRITICAL ERROR in /analyze: {e}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/send-email', methods=['POST'])
-def send_email():
-    try:
-        if not app.config['MAIL_USERNAME'] or not app.config['MAIL_PASSWORD']:
-            print("ERROR: Email credentials are not configured on the server.")
-            return jsonify({"error": "Email service is not configured by the server administrator."}), 500
-
-        data = request.get_json()
-        recipient = data.get('recipient')
-        subject = data.get('subject')
-        html_body = data.get('html_body')
-
-        if not all([recipient, subject, html_body]):
-            return jsonify({"error": "Missing required fields: recipient, subject, html_body"}), 400
-
-        msg = Message(subject, recipients=[recipient])
-        msg.html = html_body
-        mail.send(msg)
-
-        return jsonify({"message": "Email sent successfully!"}), 200
-    except Exception as e:
-        print(f"Email sending error: {e}")
-        return jsonify({"error": "Failed to send email."}), 500
+# @app.route('/send-email', methods=['POST'])
+# def send_email():
+#     # This route is temporarily disabled for debugging the main functionality
+#     pass
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)
