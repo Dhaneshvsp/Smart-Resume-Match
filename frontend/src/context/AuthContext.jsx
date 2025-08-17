@@ -1,6 +1,6 @@
 // src/context/AuthContext.jsx
 import React, { createContext, useState, useEffect } from 'react';
-import axios from '../api/axios';
+import axios from '../api/axios'; // --- UPDATED IMPORT PATH ---
 import { useNavigate } from 'react-router-dom';
 
 const AuthContext = createContext();
@@ -10,7 +10,6 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
-  // --- NEW: Alert State ---
   const [alert, setAlert] = useState(null);
   const navigate = useNavigate();
 
@@ -23,11 +22,10 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('token');
     }
   };
-
-  // --- NEW: Function to set an alert ---
+  
+  // ... the rest of the file remains exactly the same ...
   const showAlert = (msg, type = 'error') => {
     setAlert({ msg, type });
-    // Clear alert after 5 seconds
     setTimeout(() => setAlert(null), 5000);
   };
 
@@ -58,7 +56,6 @@ export const AuthProvider = ({ children }) => {
       setUser(userRes.data);
       navigate('/dashboard');
     } catch (err) {
-      // --- UPDATED: Show alert on error ---
       const errorMsg = err.response?.data?.errors[0]?.msg || 'Registration failed';
       showAlert(errorMsg, 'error');
     }
@@ -74,7 +71,6 @@ export const AuthProvider = ({ children }) => {
       setUser(userRes.data);
       navigate('/dashboard');
     } catch (err) {
-      // --- UPDATED: Show alert on error ---
       const errorMsg = err.response?.data?.errors[0]?.msg || 'Login failed';
       showAlert(errorMsg, 'error');
     }
@@ -95,8 +91,8 @@ export const AuthProvider = ({ children }) => {
         isAuthenticated,
         loading,
         user,
-        alert, // Expose alert state
-        showAlert, // Expose showAlert function
+        alert,
+        showAlert,
         register,
         login,
         logout,
