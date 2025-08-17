@@ -2,7 +2,6 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-// --- UPDATED: Added status field ---
 const CandidateSchema = new Schema({
   fileName: { type: String, required: true },
   matchScore: { type: Number, required: true },
@@ -11,8 +10,13 @@ const CandidateSchema = new Schema({
   missingSkills: [String],
   status: {
     type: String,
-    enum: ['Pending', 'Approved', 'Rejected'], // Allowed values
-    default: 'Pending', // Default status for new candidates
+    enum: ['Pending', 'Approved', 'Rejected'],
+    default: 'Pending',
+  },
+  // --- NEW FIELD ---
+  notes: {
+    type: String,
+    default: '',
   },
 });
 

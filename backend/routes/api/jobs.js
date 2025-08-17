@@ -52,6 +52,7 @@ router.get('/:id', auth, async (req, res) => {
         return res.status(404).json({ msg: 'Analysis not found' });
       }
   
+      // Ensure the user owns this job batch
       if (jobBatch.user.toString() !== req.user.id) {
         return res.status(401).json({ msg: 'User not authorized' });
       }
@@ -63,7 +64,6 @@ router.get('/:id', auth, async (req, res) => {
     }
   });
 
-// --- NEW ROUTE ---
 // @route   PUT api/jobs/:batchId/candidate/:candidateId
 // @desc    Update a candidate's status
 // @access  Private
@@ -87,7 +87,6 @@ router.put('/:batchId/candidate/:candidateId', auth, async (req, res) => {
       return res.status(401).json({ msg: 'User not authorized.' });
     }
 
-    // Find the specific candidate in the rankedCandidates array
     const candidate = jobBatch.rankedCandidates.id(req.params.candidateId);
 
     if (!candidate) {
@@ -104,5 +103,41 @@ router.put('/:batchId/candidate/:candidateId', auth, async (req, res) => {
     res.status(500).send('Server Error');
   }
 });
+
+// --- NEW ROUTE ---
+// @route   PUT api/jobs/:batchId/candidate/:candidateId/notes
+// @desc    Add or update recruiter notes for a candidate
+// @access  Private
+router.put('/:batchId/candidate/:candidateId/notes', auth, async (req, res) => {
+    try {
+      const { notes } = req.body;
+  
+      const jobBatch = await JobBatch.findById(req.params.batchId);
+  
+      if (!jobBatch) {
+        return res.status(404).json({ msg: 'Analysis batch not found.' });
+      }
+  
+      // Ensure user owns the batch
+      if (jobBatch.user.toString() !== req.user.id) {
+        return res.status(401).json({ msg: 'User not authorized.' });
+      }
+  
+      const candidate = jobBatch.rankedCandidates.id(req.params.candidateId);
+  
+      if (!candidate) {
+        return res.status(404).json({ msg: 'Candidate not found in this batch.' });
+      }
+  
+      // Update the notes and save the document
+      candidate.notes = notes;
+      await jobBatch.save();
+  
+      res.json(jobBatch); // Return the updated job batch
+    } catch (err) {
+      console.error(err.message);
+      res.status(500).send('Server Error');
+    }
+  });
 
 module.exports = router;
