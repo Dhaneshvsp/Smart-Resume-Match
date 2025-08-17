@@ -1,0 +1,7 @@
+/node_modules
+/backend/node_modules
+/frontend/node_modules
+/nlp-service/node_modules
+/nlp-service/.env
+/backend/.env
+/nlp-service/venv
