@@ -5,3 +5,4 @@
 /nlp-service/.env
 /backend/.env
 /nlp-service/venv
+/frontend/.env
